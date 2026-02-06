@@ -152,45 +152,45 @@ flowchart TB
     end
 
     subgraph DockerCompose[Docker Compose]
-        subgraph FrontendContainer[Frontend Container :3000]
+        subgraph FrontendContainer[Frontend - Port 3000]
             NextJS[Next.js 14]
             subgraph Pages
-                Dashboard[Dashboard]
-                Contracts[Contracts]
-                Portfolio[Portfolio]
+                DashboardPage[Dashboard]
+                ContractsPage[Contracts]
+                PortfolioPage[Portfolio]
             end
             APIClient[API Client]
         end
 
-        subgraph BackendContainer[Backend Container :8000]
+        subgraph BackendContainer[Backend - Port 8000]
             FastAPI[FastAPI Server]
             subgraph Routes
-                HealthRoute[/health]
-                ContractsRoute[/contracts]
-                PortfolioRoute[/portfolio]
+                HealthRoute["GET /health"]
+                ContractsRoute["CRUD /contracts"]
+                PortfolioRoute["CRUD /portfolio"]
             end
             subgraph Services
-                ContractService[contract_service]
-                PortfolioService[portfolio_service]
+                ContractService[ContractService]
+                PortfolioService[PortfolioService]
             end
             subgraph Models
-                ContractModel[Contract Model]
-                PortfolioModel[PortfolioItem Model]
+                ContractModel[Contract]
+                PortfolioModel[PortfolioItem]
             end
         end
 
-        subgraph DatabaseContainer[Database Container :5432]
+        subgraph DatabaseContainer[Database - Port 5432]
             PostgreSQL[(PostgreSQL 15)]
-            ContractsTable[contracts table]
-            PortfolioTable[portfolio_items table]
+            ContractsTable[contracts]
+            PortfolioTable[portfolio_items]
         end
     end
 
-    Browser -->|HTTP :3000| NextJS
-    Dashboard --> APIClient
-    Contracts --> APIClient
-    Portfolio --> APIClient
-    APIClient -->|HTTP :8000| FastAPI
+    Browser -->|HTTP| NextJS
+    DashboardPage --> APIClient
+    ContractsPage --> APIClient
+    PortfolioPage --> APIClient
+    APIClient -->|REST API| FastAPI
     FastAPI --> Routes
     Routes --> Services
     Services --> Models
@@ -206,113 +206,97 @@ sequenceDiagram
     participant U as User
     participant F as Frontend
     participant A as FastAPI
-    participant S as Service Layer
+    participant S as Service
     participant D as PostgreSQL
 
-    U->>F: Click "Add to Portfolio"
-    F->>A: POST /portfolio/items<br/>{ contract_id: 1 }
+    U->>F: Click Add to Portfolio
+    F->>A: POST /portfolio/items
     A->>A: Pydantic Validation
-    A->>S: add_to_portfolio(contract_id)
-    S->>D: SELECT * FROM contracts WHERE id=1
-    D-->>S: Contract { status: Available }
-    S->>S: Check: Is Available?
-    S->>D: UPDATE contracts SET status='Reserved'
-    S->>D: INSERT INTO portfolio_items
+    A->>S: add_to_portfolio
+    S->>D: SELECT contract
+    D-->>S: Contract Available
+    S->>S: Validate status
+    S->>D: UPDATE status Reserved
+    S->>D: INSERT portfolio_item
     D-->>S: OK
-    S-->>A: PortfolioItem created
+    S-->>A: PortfolioItem
     A-->>F: 201 Created
-    F->>F: Show Toast "Added!"
-    F->>F: Update UI State
-    F-->>U: Card shows "✓ Added"
+    F->>F: Show Toast
+    F-->>U: Card shows Added
 ```
 
 ### Data Flow Architecture
 
 ```mermaid
 flowchart LR
-    subgraph Frontend[Frontend Layer]
-        subgraph State[React State]
-            Filters[filters state]
-            ContractsData[contracts state]
-            PortfolioData[portfolio state]
-        end
-        subgraph Client[API Client]
-            GetContracts[getContracts]
-            GetPortfolio[getPortfolio]
-            AddToPortfolio[addToPortfolio]
-            RemoveFromPortfolio[removeFromPortfolio]
-        end
+    subgraph FE[Frontend]
+        Filters[Filters State]
+        ContractsData[Contracts State]
+        PortfolioData[Portfolio State]
+        APIClient[API Client]
     end
 
-    subgraph Backend[Backend Layer]
-        subgraph API[API Routes]
-            ContractsAPI[routes_contracts.py]
-            PortfolioAPI[routes_portfolio.py]
-        end
-        subgraph ServiceLayer[Service Layer]
-            ContractSvc[contract_service.py]
-            PortfolioSvc[portfolio_service.py]
-        end
-        subgraph ORM[SQLAlchemy Models]
-            Contract[Contract]
-            PortfolioItem[PortfolioItem]
-        end
+    subgraph BE[Backend]
+        ContractsAPI[Contracts API]
+        PortfolioAPI[Portfolio API]
+        ContractSvc[Contract Service]
+        PortfolioSvc[Portfolio Service]
+        ContractModel[Contract Model]
+        PortfolioModel[Portfolio Model]
     end
 
-    subgraph Database[Database Layer]
+    subgraph DB[Database]
         PG[(PostgreSQL)]
     end
 
-    Filters -->|trigger| GetContracts
-    GetContracts -->|HTTP| ContractsAPI
+    Filters --> APIClient
+    APIClient --> ContractsAPI
+    APIClient --> PortfolioAPI
     ContractsAPI --> ContractSvc
-    ContractSvc --> Contract
-    Contract -->|SQL| PG
-
-    GetPortfolio -->|HTTP| PortfolioAPI
     PortfolioAPI --> PortfolioSvc
-    PortfolioSvc --> PortfolioItem
-    PortfolioItem -->|SQL| PG
-
-    PG -->|results| ContractsData
-    PG -->|results| PortfolioData
+    ContractSvc --> ContractModel
+    PortfolioSvc --> PortfolioModel
+    ContractModel --> PG
+    PortfolioModel --> PG
+    PG --> ContractsData
+    PG --> PortfolioData
 ```
 
 ### Component Architecture
 
 ```mermaid
 flowchart TB
-    subgraph RootLayout[RootLayout]
-        Nav[Navigation]
-        Toast[ToastContainer]
-    end
+    RootLayout[Root Layout]
+    Nav[Navigation]
+    ToastContainer[Toast Container]
+    
+    RootLayout --> Nav
+    RootLayout --> ToastContainer
+    RootLayout --> Dashboard
+    RootLayout --> Contracts
+    RootLayout --> Portfolio
 
-    RootLayout --> DashboardPage
-    RootLayout --> ContractsPage
-    RootLayout --> PortfolioPage
-
-    subgraph DashboardPage[Dashboard Page]
-        DMetrics[MetricsCard]
-        DEnergyMix[EnergyMix Bar]
+    subgraph Dashboard[Dashboard Page]
+        DMetrics[Metrics Card]
+        DEnergyMix[Energy Mix]
         DRecent[Recent Activity]
-        DMarketStats[Market Stats]
     end
 
-    subgraph ContractsPage[Contracts Page]
-        FilterPanel[FilterPanel]
-        ContractsList[ContractCard List]
+    subgraph Contracts[Contracts Page]
+        FilterPanel[Filter Panel]
+        ContractsList[Contract Cards]
         Pagination[Pagination]
     end
 
-    subgraph PortfolioPage[Portfolio Page]
-        PMetrics[MetricsCard]
-        PPieChart[PieChart]
-        PContractsList[ContractCard List]
+    subgraph Portfolio[Portfolio Page]
+        PMetrics[Portfolio Metrics]
+        PPieChart[Pie Chart]
+        PContractsList[Contract List]
     end
 
-    FilterPanel -->|filters| ContractsList
-    ContractsList -->|add action| Toast
-    PContractsList -->|remove action| Toast
+    FilterPanel --> ContractsList
+    ContractsList --> ToastContainer
+    PContractsList --> ToastContainer
 ```
 
 ### Database Schema
