@@ -5,10 +5,10 @@ A production-ready full-stack energy contract trading platform built with FastAP
 ## Table of Contents
 
 - [Overview](#overview)
-- [System Design Architecture](#system-design-architecture)
-- [Features](#features)
 - [Tech Stack](#tech-stack)
 - [Getting Started](#getting-started)
+- [System Design Architecture](#system-design-architecture)
+- [Features](#features)
 - [API Documentation](#api-documentation)
 - [Database Schema](#database-schema)
 - [Frontend Structure](#frontend-structure)
@@ -25,438 +25,6 @@ This marketplace allows energy traders to:
 - Filter contracts by multiple criteria
 - Build a portfolio of contracts
 - View portfolio metrics and energy mix visualization
-
----
-
-## System Design Architecture
-
-### High-Level System Architecture
-
-```
-┌────────────────────────────────────────────────────────────────────────────────┐
-│                              ENERGY MARKETPLACE                                 │
-├────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                │
-│  ┌─────────────┐      ┌─────────────────────────────────────────────────────┐  │
-│  │   Client    │      │                  Docker Compose                     │  │
-│  │  (Browser)  │      │  ┌─────────────────────────────────────────────┐   │  │
-│  │             │      │  │              Frontend Container              │   │  │
-│  │  ┌───────┐  │ HTTP │  │  ┌─────────────────────────────────────┐   │   │  │
-│  │  │ React │  │◄────►│  │  │         Next.js 14 (App Router)     │   │   │  │
-│  │  │  App  │  │:3000 │  │  │  ┌─────────┐ ┌─────────┐ ┌───────┐  │   │   │  │
-│  │  └───────┘  │      │  │  │  │Dashboard│ │Contracts│ │Portfol│  │   │   │  │
-│  └─────────────┘      │  │  │  └────┬────┘ └────┬────┘ └───┬───┘  │   │   │  │
-│                       │  │  │       │           │          │      │   │   │  │
-│                       │  │  │  ┌────▼───────────▼──────────▼───┐  │   │   │  │
-│                       │  │  │  │      API Client (lib/api.ts)  │  │   │   │  │
-│                       │  │  │  └───────────────┬───────────────┘  │   │   │  │
-│                       │  │  └─────────────────┬┼──────────────────┘   │   │  │
-│                       │  └────────────────────┼┼──────────────────────┘   │  │
-│                       │                       ││                          │  │
-│                       │                       ││ HTTP :8000               │  │
-│                       │                       ▼▼                          │  │
-│                       │  ┌─────────────────────────────────────────────┐  │  │
-│                       │  │              Backend Container              │  │  │
-│                       │  │  ┌─────────────────────────────────────┐   │  │  │
-│                       │  │  │            FastAPI Server           │   │  │  │
-│                       │  │  │  ┌─────────────────────────────┐   │   │  │  │
-│                       │  │  │  │     API Routes (Endpoints)   │   │   │  │  │
-│                       │  │  │  │  /health  /contracts  /port  │   │   │  │  │
-│                       │  │  │  └──────────────┬────────────────┘   │   │  │  │
-│                       │  │  │                 │                    │   │  │  │
-│                       │  │  │  ┌──────────────▼────────────────┐   │   │  │  │
-│                       │  │  │  │       Service Layer          │   │   │  │  │
-│                       │  │  │  │  contract_service.py         │   │   │  │  │
-│                       │  │  │  │  portfolio_service.py        │   │   │  │  │
-│                       │  │  │  └──────────────┬────────────────┘   │   │  │  │
-│                       │  │  │                 │                    │   │  │  │
-│                       │  │  │  ┌──────────────▼────────────────┐   │   │  │  │
-│                       │  │  │  │    SQLAlchemy 2.0 (Async)    │   │   │  │  │
-│                       │  │  │  │  Models: Contract, Portfolio  │   │   │  │  │
-│                       │  │  │  └──────────────┬────────────────┘   │   │  │  │
-│                       │  │  └─────────────────┼────────────────────┘   │  │  │
-│                       │  └────────────────────┼────────────────────────┘  │  │
-│                       │                       │                           │  │
-│                       │                       │ TCP :5432                 │  │
-│                       │                       ▼                           │  │
-│                       │  ┌─────────────────────────────────────────────┐  │  │
-│                       │  │            Database Container               │  │  │
-│                       │  │  ┌─────────────────────────────────────┐   │  │  │
-│                       │  │  │         PostgreSQL 15              │   │  │  │
-│                       │  │  │  ┌─────────────┐ ┌───────────────┐  │   │  │  │
-│                       │  │  │  │  contracts  │ │portfolio_items│  │   │  │  │
-│                       │  │  │  │   (table)   │ │    (table)    │  │   │  │  │
-│                       │  │  │  └─────────────┘ └───────────────┘  │   │  │  │
-│                       │  │  └─────────────────────────────────────┘   │  │  │
-│                       │  └─────────────────────────────────────────────┘  │  │
-│                       └───────────────────────────────────────────────────┘  │
-└────────────────────────────────────────────────────────────────────────────────┘
-```
-
-### Request Flow Architecture
-
-```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                           REQUEST FLOW DIAGRAM                                │
-└──────────────────────────────────────────────────────────────────────────────┘
-
-  User Action                    Frontend                      Backend                       Database
-      │                             │                             │                             │
-      │  Click "Add to Portfolio"   │                             │                             │
-      │────────────────────────────►│                             │                             │
-      │                             │                             │                             │
-      │                             │  POST /portfolio/items      │                             │
-      │                             │  { contract_id: 1 }         │                             │
-      │                             │────────────────────────────►│                             │
-      │                             │                             │                             │
-      │                             │                             │  Pydantic Validation        │
-      │                             │                             │  PortfolioItemCreate        │
-      │                             │                             │──────────┐                  │
-      │                             │                             │          │                  │
-      │                             │                             │◄─────────┘                  │
-      │                             │                             │                             │
-      │                             │                             │  SELECT * FROM contracts    │
-      │                             │                             │  WHERE id = 1               │
-      │                             │                             │────────────────────────────►│
-      │                             │                             │                             │
-      │                             │                             │  Contract { status: Avail } │
-      │                             │                             │◄────────────────────────────│
-      │                             │                             │                             │
-      │                             │                             │  Business Logic Check:      │
-      │                             │                             │  - Is status "Available"?   │
-      │                             │                             │  - Already in portfolio?    │
-      │                             │                             │──────────┐                  │
-      │                             │                             │          │                  │
-      │                             │                             │◄─────────┘                  │
-      │                             │                             │                             │
-      │                             │                             │  UPDATE contracts           │
-      │                             │                             │  SET status = 'Reserved'    │
-      │                             │                             │────────────────────────────►│
-      │                             │                             │                             │
-      │                             │                             │  INSERT INTO portfolio_items│
-      │                             │                             │────────────────────────────►│
-      │                             │                             │                             │
-      │                             │                             │           OK                │
-      │                             │                             │◄────────────────────────────│
-      │                             │                             │                             │
-      │                             │  201 Created                │                             │
-      │                             │  { id, contract_id, ... }   │                             │
-      │                             │◄────────────────────────────│                             │
-      │                             │                             │                             │
-      │                             │  Show Toast: "Added!"       │                             │
-      │                             │  Update UI State            │                             │
-      │                             │──────────┐                  │                             │
-      │                             │          │                  │                             │
-      │  Toast Notification         │◄─────────┘                  │                             │
-      │  Card shows "✓ Added"       │                             │                             │
-      │◄────────────────────────────│                             │                             │
-      │                             │                             │                             │
-```
-
-### Data Flow Architecture
-
-```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                            DATA FLOW DIAGRAM                                  │
-└──────────────────────────────────────────────────────────────────────────────┘
-
-                              ┌─────────────────┐
-                              │   User Input    │
-                              │  (Filter Form)  │
-                              └────────┬────────┘
-                                       │
-                                       ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              FRONTEND LAYER                                  │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                         React State                                  │   │
-│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐               │   │
-│  │  │   filters    │  │   contracts  │  │   portfolio  │               │   │
-│  │  │ {            │  │ {            │  │ {            │               │   │
-│  │  │  energy_type │  │  items: []   │  │  items: []   │               │   │
-│  │  │  price_min   │  │  total: 0    │  │  metrics: {} │               │   │
-│  │  │  price_max   │  │  loading     │  │  loading     │               │   │
-│  │  │  location    │  │ }            │  │ }            │               │   │
-│  │  │ }            │  │              │  │              │               │   │
-│  │  └──────┬───────┘  └──────▲───────┘  └──────▲───────┘               │   │
-│  │         │                 │                 │                        │   │
-│  │         │    ┌────────────┴─────────────────┴────────────┐          │   │
-│  │         │    │              API Client                   │          │   │
-│  │         │    │  ┌─────────────────────────────────────┐  │          │   │
-│  │         └───►│  │  getContracts(filters)              │  │          │   │
-│  │              │  │  getPortfolio()                     │  │          │   │
-│  │              │  │  addToPortfolio(id)                 │  │          │   │
-│  │              │  │  removeFromPortfolio(id)            │  │          │   │
-│  │              │  └─────────────────────────────────────┘  │          │   │
-│  │              └────────────────┬──────────────────────────┘          │   │
-│  └───────────────────────────────┼──────────────────────────────────────┘   │
-└──────────────────────────────────┼──────────────────────────────────────────┘
-                                   │
-                                   │ HTTP Request
-                                   ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              BACKEND LAYER                                   │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                         API Routes                                   │   │
-│  │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐      │   │
-│  │  │ routes_contracts│  │ routes_portfolio│  │     /health     │      │   │
-│  │  │  POST /         │  │  POST /items    │  │                 │      │   │
-│  │  │  GET  /         │  │  DELETE /items  │  │                 │      │   │
-│  │  │  GET  /{id}     │  │  GET  /         │  │                 │      │   │
-│  │  │  PUT  /{id}     │  │                 │  │                 │      │   │
-│  │  │  DELETE /{id}   │  │                 │  │                 │      │   │
-│  │  └────────┬────────┘  └────────┬────────┘  └─────────────────┘      │   │
-│  │           │                    │                                     │   │
-│  │           └──────────┬─────────┘                                     │   │
-│  │                      ▼                                               │   │
-│  │  ┌─────────────────────────────────────────────────────────────┐    │   │
-│  │  │                    Service Layer                             │    │   │
-│  │  │  ┌─────────────────────┐  ┌─────────────────────────────┐   │    │   │
-│  │  │  │  contract_service   │  │    portfolio_service        │   │    │   │
-│  │  │  │  - create_contract  │  │  - add_to_portfolio         │   │    │   │
-│  │  │  │  - get_contract     │  │  - remove_from_portfolio    │   │    │   │
-│  │  │  │  - update_contract  │  │  - get_portfolio            │   │    │   │
-│  │  │  │  - delete_contract  │  │  - calculate_metrics        │   │    │   │
-│  │  │  │  - list_contracts   │  │    (weighted_avg, breakdown)│   │    │   │
-│  │  │  └─────────────────────┘  └─────────────────────────────┘   │    │   │
-│  │  └──────────────────────────────┬──────────────────────────────┘    │   │
-│  │                                 │                                    │   │
-│  │                                 ▼                                    │   │
-│  │  ┌─────────────────────────────────────────────────────────────┐    │   │
-│  │  │                    SQLAlchemy Models                         │    │   │
-│  │  │  ┌─────────────────────┐  ┌─────────────────────────────┐   │    │   │
-│  │  │  │      Contract       │  │      PortfolioItem          │   │    │   │
-│  │  │  │  - id               │  │  - id                       │   │    │   │
-│  │  │  │  - energy_type      │  │  - contract_id (FK)         │   │    │   │
-│  │  │  │  - quantity_mwh     │  │  - added_at                 │   │    │   │
-│  │  │  │  - price_per_mwh    │  │  - contract (relationship)  │   │    │   │
-│  │  │  │  - delivery_start   │  │                             │   │    │   │
-│  │  │  │  - delivery_end     │  │                             │   │    │   │
-│  │  │  │  - location         │  │                             │   │    │   │
-│  │  │  │  - status           │  │                             │   │    │   │
-│  │  │  └─────────────────────┘  └─────────────────────────────┘   │    │   │
-│  │  └─────────────────────────────────────────────────────────────┘    │   │
-│  └──────────────────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                   │
-                                   │ SQL Queries
-                                   ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                             DATABASE LAYER                                   │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                         PostgreSQL 15                                │   │
-│  │                                                                      │   │
-│  │  ┌─────────────────────────────────────────────────────────────┐   │   │
-│  │  │                      contracts                               │   │   │
-│  │  │  ┌────┬────────────┬────────────┬────────────┬────────────┐ │   │   │
-│  │  │  │ id │energy_type │quantity_mwh│price_per_mwh│  status   │ │   │   │
-│  │  │  ├────┼────────────┼────────────┼────────────┼────────────┤ │   │   │
-│  │  │  │ 1  │ Solar      │ 500.00     │ 45.50      │ Available  │ │   │   │
-│  │  │  │ 2  │ Wind       │ 1200.00    │ 38.75      │ Reserved   │ │   │   │
-│  │  │  │ 3  │ Nuclear    │ 2000.00    │ 35.00      │ Available  │ │   │   │
-│  │  │  └────┴────────────┴────────────┴────────────┴────────────┘ │   │   │
-│  │  └─────────────────────────────────────────────────────────────┘   │   │
-│  │                                                                      │   │
-│  │  ┌─────────────────────────────────────────────────────────────┐   │   │
-│  │  │                    portfolio_items                           │   │   │
-│  │  │  ┌────┬─────────────┬─────────────────────────┐             │   │   │
-│  │  │  │ id │ contract_id │        added_at         │             │   │   │
-│  │  │  ├────┼─────────────┼─────────────────────────┤             │   │   │
-│  │  │  │ 1  │      2      │ 2026-02-06 20:00:00     │             │   │   │
-│  │  │  └────┴─────────────┴─────────────────────────┘             │   │   │
-│  │  └─────────────────────────────────────────────────────────────┘   │   │
-│  └──────────────────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-### Component Architecture
-
-```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                         FRONTEND COMPONENT TREE                               │
-└──────────────────────────────────────────────────────────────────────────────┘
-
-                              RootLayout
-                                  │
-                    ┌─────────────┼─────────────┐
-                    │             │             │
-                    ▼             ▼             ▼
-              DashboardPage  ContractsPage  PortfolioPage
-                    │             │             │
-        ┌───────────┼───────┐    │    ┌────────┼────────┐
-        │           │       │    │    │        │        │
-        ▼           ▼       ▼    │    ▼        ▼        ▼
-   MetricsCard  EnergyMix  Recent│  MetricsCard PieChart ContractCard[]
-   (Portfolio)  (BarChart) Activity    │                    │
-        │           │       │    │    │                    │
-        └───────────┼───────┘    │    └────────┬───────────┘
-                    │            │             │
-                    │            │             │
-                    │    ┌───────┴───────┐     │
-                    │    │               │     │
-                    │    ▼               ▼     │
-                    │  FilterPanel  ContractCard[]
-                    │    │               │     │
-                    │    │    ┌──────────┘     │
-                    │    │    │                │
-                    │    ▼    ▼                │
-                    │  Toast Notifications     │
-                    │    (Global)              │
-                    └──────────────────────────┘
-
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                              COMPONENT DETAILS                                │
-├──────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  ContractCard                    FilterPanel                                 │
-│  ┌────────────────────┐         ┌────────────────────┐                      │
-│  │ ┌──────┐ ┌───────┐ │         │ Energy Type        │                      │
-│  │ │Solar │ │Availab│ │         │ [Solar][Wind][Gas] │                      │
-│  │ └──────┘ └───────┘ │         │                    │                      │
-│  │                    │         │ Price Range        │                      │
-│  │ Quantity: 500 MWh  │         │ [Min] - [Max]      │                      │
-│  │ Price: $45.50/MWh  │         │                    │                      │
-│  │ Total: $22,750     │         │ Quantity Range     │                      │
-│  │ Location: CA       │         │ [Min] - [Max]      │                      │
-│  │ Delivery: 03/01-05 │         │                    │                      │
-│  │                    │         │ Location           │                      │
-│  │ [Add to Portfolio] │         │ [Dropdown ▼]       │                      │
-│  └────────────────────┘         │                    │                      │
-│                                 │ Delivery Dates     │                      │
-│  MetricsCard                    │ [Start] - [End]    │                      │
-│  ┌────────────────────┐         │                    │                      │
-│  │ Total    Total     │         │ ─────────────────  │                      │
-│  │ Contracts Capacity │         │ 16 contracts found │                      │
-│  │    2      1700 MWh │         └────────────────────┘                      │
-│  │                    │                                                      │
-│  │ Total    Weighted  │         PieChart                                    │
-│  │ Cost     Avg Price │         ┌────────────────────┐                      │
-│  │ $69,475  $40.87    │         │    ┌────────┐      │                      │
-│  └────────────────────┘         │   /  Solar  \     │                      │
-│                                 │  │   40%    │     │                      │
-│                                 │  │  Wind    │     │                      │
-│                                 │   \  60%   /      │                      │
-│                                 │    └────────┘      │                      │
-│                                 │ ● Solar  ● Wind   │                      │
-│                                 └────────────────────┘                      │
-└──────────────────────────────────────────────────────────────────────────────┘
-```
-
-### Expected Results
-
-```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                            EXPECTED BEHAVIOR                                  │
-└──────────────────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ SCENARIO 1: User adds contract to portfolio                                  │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  INPUT:                          OUTPUT:                                    │
-│  ───────                         ────────                                   │
-│  User clicks "Add to Portfolio"  1. Contract status: Available → Reserved   │
-│  on Solar contract (id: 1)       2. Portfolio item created                  │
-│                                  3. Toast: "Added Solar contract"           │
-│                                  4. Card shows "✓ Added" badge              │
-│                                  5. Contract disappears from Available list │
-│                                                                             │
-│  API Call:                       Response:                                  │
-│  POST /portfolio/items           201 Created                                │
-│  { "contract_id": 1 }            { "id": 1, "contract_id": 1, ... }        │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ SCENARIO 2: User views portfolio metrics                                     │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  Portfolio Contents:             Calculated Metrics:                        │
-│  ───────────────────             ────────────────────                       │
-│  Contract A: 100 MWh × $50       total_contracts: 2                         │
-│  Contract B: 200 MWh × $40       total_capacity_mwh: 300                    │
-│                                  total_cost: $13,000                        │
-│                                  weighted_avg_price: $43.33/MWh             │
-│                                                                             │
-│  Calculation:                                                               │
-│  ────────────                                                               │
-│  Total Cost = (100 × 50) + (200 × 40) = 5000 + 8000 = $13,000              │
-│  Weighted Avg = 13000 / 300 = $43.33/MWh                                   │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ SCENARIO 3: User filters contracts                                           │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  Filter Input:                   Expected Result:                           │
-│  ─────────────                   ────────────────                           │
-│  energy_type: [Solar, Wind]      Returns contracts where:                   │
-│  price_max: 45                   - energy_type IN (Solar, Wind)             │
-│  location: Texas                 - price_per_mwh <= 45                      │
-│                                  - location ILIKE '%Texas%'                 │
-│                                  - status = 'Available'                     │
-│                                                                             │
-│  API Call:                                                                  │
-│  GET /contracts?energy_type=Solar&energy_type=Wind&price_max=45&location=TX │
-│                                                                             │
-│  Response:                                                                  │
-│  { "items": [...], "total": 3, "limit": 20, "offset": 0 }                  │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ SCENARIO 4: Error handling                                                   │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  Action                          Expected Response                          │
-│  ──────                          ─────────────────                          │
-│  Add Reserved contract           409 Conflict                               │
-│                                  "Contract is Reserved, only Available..."  │
-│                                                                             │
-│  Delete contract in portfolio    409 Conflict                               │
-│                                  "Cannot delete contract in portfolio"      │
-│                                                                             │
-│  Get non-existent contract       404 Not Found                              │
-│                                  "Contract not found"                       │
-│                                                                             │
-│  Invalid date range              422 Unprocessable Entity                   │
-│  (end < start)                   "delivery_end must be >= delivery_start"   │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Features
-
-### Contract Management
-- **CRUD Operations**: Create, read, update, delete contracts
-- **Multi-criteria Filtering**: Energy type, price range, quantity, location, delivery dates
-- **Sorting**: By price, quantity, or delivery date (asc/desc)
-- **Pagination**: Configurable limit/offset
-
-### Portfolio Builder
-- **Add/Remove Contracts**: Only "Available" contracts can be added
-- **Status Transitions**: Available → Reserved (on add) → Available (on remove)
-- **Real-time Metrics**:
-  - Total contracts count
-  - Total capacity (MWh)
-  - Total cost (USD)
-  - Weighted average price per MWh
-  - Breakdown by energy type
-
-### Dashboard
-- Portfolio overview with key metrics
-- Marketplace statistics
-- Energy mix bar chart
-- Recent activity feed
-
-### UI/UX
-- Responsive design (mobile-friendly)
-- Toast notifications for actions
-- Loading states and error handling
-- Visual feedback for added contracts
 
 ---
 
@@ -573,6 +141,299 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 
 ---
 
+## System Design Architecture
+
+### High-Level System Architecture
+
+```mermaid
+flowchart TB
+    subgraph Client
+        Browser[Browser]
+    end
+
+    subgraph DockerCompose[Docker Compose]
+        subgraph FrontendContainer[Frontend Container :3000]
+            NextJS[Next.js 14]
+            subgraph Pages
+                Dashboard[Dashboard]
+                Contracts[Contracts]
+                Portfolio[Portfolio]
+            end
+            APIClient[API Client]
+        end
+
+        subgraph BackendContainer[Backend Container :8000]
+            FastAPI[FastAPI Server]
+            subgraph Routes
+                HealthRoute[/health]
+                ContractsRoute[/contracts]
+                PortfolioRoute[/portfolio]
+            end
+            subgraph Services
+                ContractService[contract_service]
+                PortfolioService[portfolio_service]
+            end
+            subgraph Models
+                ContractModel[Contract Model]
+                PortfolioModel[PortfolioItem Model]
+            end
+        end
+
+        subgraph DatabaseContainer[Database Container :5432]
+            PostgreSQL[(PostgreSQL 15)]
+            ContractsTable[contracts table]
+            PortfolioTable[portfolio_items table]
+        end
+    end
+
+    Browser -->|HTTP :3000| NextJS
+    Dashboard --> APIClient
+    Contracts --> APIClient
+    Portfolio --> APIClient
+    APIClient -->|HTTP :8000| FastAPI
+    FastAPI --> Routes
+    Routes --> Services
+    Services --> Models
+    Models -->|SQL| PostgreSQL
+    PostgreSQL --> ContractsTable
+    PostgreSQL --> PortfolioTable
+```
+
+### Request Flow - Add to Portfolio
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant F as Frontend
+    participant A as FastAPI
+    participant S as Service Layer
+    participant D as PostgreSQL
+
+    U->>F: Click "Add to Portfolio"
+    F->>A: POST /portfolio/items<br/>{ contract_id: 1 }
+    A->>A: Pydantic Validation
+    A->>S: add_to_portfolio(contract_id)
+    S->>D: SELECT * FROM contracts WHERE id=1
+    D-->>S: Contract { status: Available }
+    S->>S: Check: Is Available?
+    S->>D: UPDATE contracts SET status='Reserved'
+    S->>D: INSERT INTO portfolio_items
+    D-->>S: OK
+    S-->>A: PortfolioItem created
+    A-->>F: 201 Created
+    F->>F: Show Toast "Added!"
+    F->>F: Update UI State
+    F-->>U: Card shows "✓ Added"
+```
+
+### Data Flow Architecture
+
+```mermaid
+flowchart LR
+    subgraph Frontend[Frontend Layer]
+        subgraph State[React State]
+            Filters[filters state]
+            ContractsData[contracts state]
+            PortfolioData[portfolio state]
+        end
+        subgraph Client[API Client]
+            GetContracts[getContracts]
+            GetPortfolio[getPortfolio]
+            AddToPortfolio[addToPortfolio]
+            RemoveFromPortfolio[removeFromPortfolio]
+        end
+    end
+
+    subgraph Backend[Backend Layer]
+        subgraph API[API Routes]
+            ContractsAPI[routes_contracts.py]
+            PortfolioAPI[routes_portfolio.py]
+        end
+        subgraph ServiceLayer[Service Layer]
+            ContractSvc[contract_service.py]
+            PortfolioSvc[portfolio_service.py]
+        end
+        subgraph ORM[SQLAlchemy Models]
+            Contract[Contract]
+            PortfolioItem[PortfolioItem]
+        end
+    end
+
+    subgraph Database[Database Layer]
+        PG[(PostgreSQL)]
+    end
+
+    Filters -->|trigger| GetContracts
+    GetContracts -->|HTTP| ContractsAPI
+    ContractsAPI --> ContractSvc
+    ContractSvc --> Contract
+    Contract -->|SQL| PG
+
+    GetPortfolio -->|HTTP| PortfolioAPI
+    PortfolioAPI --> PortfolioSvc
+    PortfolioSvc --> PortfolioItem
+    PortfolioItem -->|SQL| PG
+
+    PG -->|results| ContractsData
+    PG -->|results| PortfolioData
+```
+
+### Component Architecture
+
+```mermaid
+flowchart TB
+    subgraph RootLayout[RootLayout]
+        Nav[Navigation]
+        Toast[ToastContainer]
+    end
+
+    RootLayout --> DashboardPage
+    RootLayout --> ContractsPage
+    RootLayout --> PortfolioPage
+
+    subgraph DashboardPage[Dashboard Page]
+        DMetrics[MetricsCard]
+        DEnergyMix[EnergyMix Bar]
+        DRecent[Recent Activity]
+        DMarketStats[Market Stats]
+    end
+
+    subgraph ContractsPage[Contracts Page]
+        FilterPanel[FilterPanel]
+        ContractsList[ContractCard List]
+        Pagination[Pagination]
+    end
+
+    subgraph PortfolioPage[Portfolio Page]
+        PMetrics[MetricsCard]
+        PPieChart[PieChart]
+        PContractsList[ContractCard List]
+    end
+
+    FilterPanel -->|filters| ContractsList
+    ContractsList -->|add action| Toast
+    PContractsList -->|remove action| Toast
+```
+
+### Database Schema
+
+```mermaid
+erDiagram
+    contracts {
+        int id PK
+        varchar energy_type
+        numeric quantity_mwh
+        numeric price_per_mwh
+        date delivery_start
+        date delivery_end
+        varchar location
+        enum status
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    portfolio_items {
+        int id PK
+        int contract_id FK
+        timestamp added_at
+    }
+
+    portfolio_items ||--o| contracts : "references"
+```
+
+### CI/CD Pipeline
+
+```mermaid
+flowchart TB
+    subgraph Trigger[Trigger]
+        Push[Push to main]
+        PR[Pull Request]
+    end
+
+    Push --> Pipeline
+    PR --> Pipeline
+
+    subgraph Pipeline[GitHub Actions]
+        subgraph BackendJob[Backend Job]
+            B1[Checkout]
+            B2[Setup Python 3.11]
+            B3[Install deps]
+            B4[ruff check - Lint]
+            B5[ruff format - Format]
+            B6[pytest - 10 Tests]
+            B1 --> B2 --> B3 --> B4 --> B5 --> B6
+        end
+
+        subgraph FrontendJob[Frontend Job]
+            F1[Checkout]
+            F2[Setup Node 20]
+            F3[npm ci]
+            F4[ESLint - Lint]
+            F5[tsc - Typecheck]
+            F6[next build - Build]
+            F1 --> F2 --> F3 --> F4 --> F5 --> F6
+        end
+
+        subgraph DockerJob[Docker Job]
+            D1[Checkout]
+            D2[Build Backend Image]
+            D3[Build Frontend Image]
+            D1 --> D2 --> D3
+        end
+    end
+
+    BackendJob --> DockerJob
+    FrontendJob --> DockerJob
+
+    DockerJob --> Success[✓ Success]
+```
+
+### Status Transition Flow
+
+```mermaid
+stateDiagram-v2
+    [*] --> Available: Contract Created
+    Available --> Reserved: Add to Portfolio
+    Reserved --> Available: Remove from Portfolio
+    Available --> Sold: Mark as Sold
+    Reserved --> Sold: Complete Purchase
+    Sold --> [*]
+```
+
+---
+
+## Features
+
+### Contract Management
+- **CRUD Operations**: Create, read, update, delete contracts
+- **Multi-criteria Filtering**: Energy type, price range, quantity, location, delivery dates
+- **Sorting**: By price, quantity, or delivery date (asc/desc)
+- **Pagination**: Configurable limit/offset
+
+### Portfolio Builder
+- **Add/Remove Contracts**: Only "Available" contracts can be added
+- **Status Transitions**: Available → Reserved (on add) → Available (on remove)
+- **Real-time Metrics**:
+  - Total contracts count
+  - Total capacity (MWh)
+  - Total cost (USD)
+  - Weighted average price per MWh
+  - Breakdown by energy type
+
+### Dashboard
+- Portfolio overview with key metrics
+- Marketplace statistics
+- Energy mix bar chart
+- Recent activity feed
+
+### UI/UX
+- Responsive design (mobile-friendly)
+- Toast notifications for actions
+- Loading states and error handling
+- Visual feedback for added contracts
+
+---
+
 ## API Documentation
 
 ### Endpoints Overview
@@ -612,48 +473,6 @@ GET /contracts?energy_type=Solar&energy_type=Wind&price_min=30&price_max=50&qty_
 | `offset` | int | Pagination offset (default: 0) |
 | `sort_by` | string | Sort field: `price_per_mwh`, `quantity_mwh`, `delivery_start`, `id` |
 | `sort_dir` | string | Sort direction: `asc`, `desc` |
-
----
-
-## Database Schema
-
-### Entity Relationship Diagram
-
-```
-┌─────────────────────────────────────┐
-│             contracts               │
-├─────────────────────────────────────┤
-│ id              SERIAL PRIMARY KEY  │
-│ energy_type     VARCHAR(50) NOT NULL│
-│ quantity_mwh    NUMERIC(12,2)       │
-│ price_per_mwh   NUMERIC(10,2)       │
-│ delivery_start  DATE NOT NULL       │
-│ delivery_end    DATE NOT NULL       │
-│ location        VARCHAR(100)        │
-│ status          ENUM (Available,    │
-│                       Reserved,     │
-│                       Sold)         │
-│ created_at      TIMESTAMP           │
-│ updated_at      TIMESTAMP           │
-├─────────────────────────────────────┤
-│ INDEXES:                            │
-│  - ix_contracts_energy_type         │
-│  - ix_contracts_location            │
-│  - ix_contracts_delivery_start      │
-│  - ix_contracts_status              │
-└─────────────────────────────────────┘
-              │
-              │ FK (contract_id)
-              │ ON DELETE RESTRICT
-              ▼
-┌─────────────────────────────────────┐
-│          portfolio_items            │
-├─────────────────────────────────────┤
-│ id              SERIAL PRIMARY KEY  │
-│ contract_id     INTEGER UNIQUE      │
-│ added_at        TIMESTAMP           │
-└─────────────────────────────────────┘
-```
 
 ---
 
@@ -706,216 +525,6 @@ npm run build
 
 ---
 
-## CI/CD Pipeline
-
-### GitHub Actions Setup
-
-The CI pipeline is defined in `.github/workflows/ci.yml` and runs automatically on:
-- Every push to `main` branch
-- Every pull request to `main` branch
-
-### Pipeline Architecture
-
-```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                          GITHUB ACTIONS CI PIPELINE                           │
-└──────────────────────────────────────────────────────────────────────────────┘
-
-  ┌─────────────────┐
-  │  Push to main   │
-  │       or        │
-  │  Pull Request   │
-  └────────┬────────┘
-           │
-           ▼
-  ┌────────────────────────────────────────────────────────────────────────┐
-  │                         PARALLEL EXECUTION                              │
-  │  ┌─────────────────────────────┐  ┌─────────────────────────────────┐  │
-  │  │      BACKEND JOB            │  │        FRONTEND JOB             │  │
-  │  │      (ubuntu-latest)        │  │        (ubuntu-latest)          │  │
-  │  │                             │  │                                 │  │
-  │  │  ┌───────────────────────┐  │  │  ┌───────────────────────────┐  │  │
-  │  │  │ 1. Checkout code      │  │  │  │ 1. Checkout code          │  │  │
-  │  │  └───────────┬───────────┘  │  │  └───────────┬───────────────┘  │  │
-  │  │              ▼              │  │              ▼                  │  │
-  │  │  ┌───────────────────────┐  │  │  ┌───────────────────────────┐  │  │
-  │  │  │ 2. Setup Python 3.11  │  │  │  │ 2. Setup Node.js 20       │  │  │
-  │  │  └───────────┬───────────┘  │  │  └───────────┬───────────────┘  │  │
-  │  │              ▼              │  │              ▼                  │  │
-  │  │  ┌───────────────────────┐  │  │  ┌───────────────────────────┐  │  │
-  │  │  │ 3. Install deps       │  │  │  │ 3. npm ci (with cache)    │  │  │
-  │  │  │    pip install -e .[dev]│  │  │  └───────────┬───────────────┘  │  │
-  │  │  └───────────┬───────────┘  │  │              ▼                  │  │
-  │  │              ▼              │  │  ┌───────────────────────────┐  │  │
-  │  │  ┌───────────────────────┐  │  │  │ 4. Lint (ESLint)          │  │  │
-  │  │  │ 4. Lint (ruff check)  │  │  │  │    npm run lint           │  │  │
-  │  │  └───────────┬───────────┘  │  │  └───────────┬───────────────┘  │  │
-  │  │              ▼              │  │              ▼                  │  │
-  │  │  ┌───────────────────────┐  │  │  ┌───────────────────────────┐  │  │
-  │  │  │ 5. Format check       │  │  │  │ 5. Type check (tsc)       │  │  │
-  │  │  │    ruff format --check│  │  │  │    npm run typecheck      │  │  │
-  │  │  └───────────┬───────────┘  │  │  └───────────┬───────────────┘  │  │
-  │  │              ▼              │  │              ▼                  │  │
-  │  │  ┌───────────────────────┐  │  │  ┌───────────────────────────┐  │  │
-  │  │  │ 6. Run tests          │  │  │  │ 6. Build (next build)     │  │  │
-  │  │  │    pytest -v          │  │  │  │    npm run build          │  │  │
-  │  │  │    (10 tests)         │  │  │  └───────────┬───────────────┘  │  │
-  │  │  └───────────┬───────────┘  │  │              │                  │  │
-  │  │              │              │  │              │                  │  │
-  │  └──────────────┼──────────────┘  └──────────────┼──────────────────┘  │
-  │                 │                                │                     │
-  └─────────────────┼────────────────────────────────┼─────────────────────┘
-                    │                                │
-                    └───────────────┬────────────────┘
-                                    │
-                                    ▼
-                    ┌───────────────────────────────┐
-                    │         DOCKER JOB            │
-                    │    (needs: backend, frontend) │
-                    │                               │
-                    │  ┌─────────────────────────┐  │
-                    │  │ 1. Checkout code        │  │
-                    │  └───────────┬─────────────┘  │
-                    │              ▼                │
-                    │  ┌─────────────────────────┐  │
-                    │  │ 2. Build backend image  │  │
-                    │  │    docker build ./backend│  │
-                    │  └───────────┬─────────────┘  │
-                    │              ▼                │
-                    │  ┌─────────────────────────┐  │
-                    │  │ 3. Build frontend image │  │
-                    │  │    docker build ./frontend│ │
-                    │  └─────────────────────────┘  │
-                    │                               │
-                    └───────────────────────────────┘
-                                    │
-                                    ▼
-                         ┌─────────────────┐
-                         │   ✓ SUCCESS     │
-                         │   or            │
-                         │   ✗ FAILURE     │
-                         └─────────────────┘
-```
-
-### Pipeline Coverage
-
-```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                            CI COVERAGE SUMMARY                                │
-├──────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  BACKEND COVERAGE                                                            │
-│  ────────────────                                                            │
-│  ┌────────────────────┬──────────────────────────────────────────────────┐  │
-│  │ Check              │ What it validates                                │  │
-│  ├────────────────────┼──────────────────────────────────────────────────┤  │
-│  │ ruff check         │ Python linting: unused imports, undefined vars,  │  │
-│  │                    │ code style issues, potential bugs                │  │
-│  ├────────────────────┼──────────────────────────────────────────────────┤  │
-│  │ ruff format --check│ Code formatting: consistent indentation,         │  │
-│  │                    │ line length, import sorting                      │  │
-│  ├────────────────────┼──────────────────────────────────────────────────┤  │
-│  │ pytest -v          │ Unit tests (10 tests):                           │  │
-│  │                    │ - Contract CRUD operations                       │  │
-│  │                    │ - Input validation (dates, required fields)      │  │
-│  │                    │ - Filtering logic (combined filters)             │  │
-│  │                    │ - Portfolio add/remove operations                │  │
-│  │                    │ - Metrics calculation (weighted average)         │  │
-│  │                    │ - Error handling (404, 409, 422)                 │  │
-│  └────────────────────┴──────────────────────────────────────────────────┘  │
-│                                                                              │
-│  FRONTEND COVERAGE                                                           │
-│  ─────────────────                                                           │
-│  ┌────────────────────┬──────────────────────────────────────────────────┐  │
-│  │ Check              │ What it validates                                │  │
-│  ├────────────────────┼──────────────────────────────────────────────────┤  │
-│  │ npm run lint       │ ESLint: React best practices, hooks rules,       │  │
-│  │ (next lint)        │ accessibility, import errors                     │  │
-│  ├────────────────────┼──────────────────────────────────────────────────┤  │
-│  │ npm run typecheck  │ TypeScript: type safety, interface compliance,   │  │
-│  │ (tsc --noEmit)     │ null checks, API response types                  │  │
-│  ├────────────────────┼──────────────────────────────────────────────────┤  │
-│  │ npm run build      │ Production build: compilation, optimization,     │  │
-│  │ (next build)       │ static generation, bundle size                   │  │
-│  └────────────────────┴──────────────────────────────────────────────────┘  │
-│                                                                              │
-│  DOCKER COVERAGE                                                             │
-│  ───────────────                                                             │
-│  ┌────────────────────┬──────────────────────────────────────────────────┐  │
-│  │ Check              │ What it validates                                │  │
-│  ├────────────────────┼──────────────────────────────────────────────────┤  │
-│  │ docker build       │ Dockerfile syntax, dependency installation,      │  │
-│  │ ./backend          │ Python package builds, image creation            │  │
-│  ├────────────────────┼──────────────────────────────────────────────────┤  │
-│  │ docker build       │ Multi-stage build, npm install, Next.js build,   │  │
-│  │ ./frontend         │ standalone output, image creation                │  │
-│  └────────────────────┴──────────────────────────────────────────────────┘  │
-│                                                                              │
-└──────────────────────────────────────────────────────────────────────────────┘
-```
-
-### Test Results Example
-
-```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                         PYTEST OUTPUT (10 TESTS)                              │
-├──────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  tests/test_contracts.py::test_create_contract_valid PASSED        [ 10%]   │
-│  tests/test_contracts.py::test_create_contract_invalid_dates PASSED[ 20%]   │
-│  tests/test_contracts.py::test_filter_by_energy_type_and_price PASSED[30%]  │
-│  tests/test_contracts.py::test_filter_multiple_energy_types PASSED [ 40%]   │
-│  tests/test_contracts.py::test_contract_not_found PASSED           [ 50%]   │
-│  tests/test_portfolio.py::test_add_to_portfolio PASSED             [ 60%]   │
-│  tests/test_portfolio.py::test_cannot_add_reserved_contract PASSED [ 70%]   │
-│  tests/test_portfolio.py::test_portfolio_metrics_weighted_avg PASSED[80%]   │
-│  tests/test_portfolio.py::test_remove_from_portfolio PASSED        [ 90%]   │
-│  tests/test_portfolio.py::test_cannot_delete_contract_in_portfolio PASSED   │
-│                                                                    [100%]   │
-│                                                                              │
-│  ========================= 10 passed in 0.21s ============================   │
-│                                                                              │
-└──────────────────────────────────────────────────────────────────────────────┘
-```
-
-### How to View CI Results
-
-1. Go to repository on GitHub
-2. Click **Actions** tab
-3. Select the latest workflow run
-4. View job logs for each step
-
-```
-GitHub Repository
-      │
-      └── Actions (tab)
-            │
-            └── CI (workflow)
-                  │
-                  ├── backend (job)
-                  │     ├── ✓ Checkout
-                  │     ├── ✓ Setup Python
-                  │     ├── ✓ Install dependencies
-                  │     ├── ✓ Lint with ruff
-                  │     ├── ✓ Format check
-                  │     └── ✓ Run tests
-                  │
-                  ├── frontend (job)
-                  │     ├── ✓ Checkout
-                  │     ├── ✓ Setup Node.js
-                  │     ├── ✓ Install dependencies
-                  │     ├── ✓ Lint
-                  │     ├── ✓ Type check
-                  │     └── ✓ Build
-                  │
-                  └── docker (job)
-                        ├── ✓ Checkout
-                        ├── ✓ Build backend image
-                        └── ✓ Build frontend image
-```
-
----
-
 ## Design Decisions
 
 ### 1. Contract Deletion Protection
@@ -926,11 +535,7 @@ GitHub Repository
 
 ### 2. Status Transitions
 
-```
-Available ──(add to portfolio)──▶ Reserved
-    ▲                                │
-    └────(remove from portfolio)─────┘
-```
+**Flow**: `Available → Reserved (on add) → Available (on remove)`
 
 ### 3. Single User Portfolio
 
